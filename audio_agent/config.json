@@ -1,0 +1,64 @@
+{
+  "audio": {
+    "sample_rate": 16000,
+    "chunk_duration_ms": 30,
+    "vad_mode": 3,
+    "silence_threshold_ms": 430,
+    "pre_speech_buffer_ms": 300,
+    "volume_threshold_db": -35
+  },
+  "wake_word": {
+    "phrase": "hej watusiu",
+    "alternatives": ["hej watuś", "hej watu", "ej watusiu"],
+    "threshold": 0.7
+  },
+  "speaker_recognition": {
+    "model_name": "speechbrain/spkrec-ecapa-voxceleb",
+    "threshold": 0.85,
+    "leader_timeout_seconds": 180
+  },
+  "whisper": {
+    "model_size": "medium",
+    "language": "pl",
+    "device": "cuda",
+    "compute_type": "float16"
+  },
+  "api": {
+    "endpoint_url": "http://127.0.0.1:8000/api1/process_question"
+  },
+  "vad": {
+    "aggressiveness": 2,
+    "silence_duration_ms": 900
+  },
+  "tts": {
+    "engine": "edge",
+    "voice": "pl-PL-MarekNeural",
+    "rate": "+0%",
+    "volume": "+0%"
+  },
+  "led": {
+    "green_pin": 17,
+    "red_pin": 27,
+    "mock_mode": true
+  },
+  "zmq": {
+    "dialog_publisher": "tcp://127.0.0.1:5565",
+    "response_subscriber": "tcp://127.0.0.1:5566",
+    "reporter_publisher": "tcp://127.0.0.1:5567"
+  },
+  "llm": {
+    "endpoint": "http://localhost:11434/api/chat",
+    "model": "llama3",
+    "timeout": 30
+  },
+  "data": {
+    "dialog_file": "data/dialog.jsonl",
+    "camera_file": "data/camera.jsonl",
+    "lidar_file": "data/lidar.jsonl",
+    "scenarios_file": "data/scenarios.jsonl"
+  },
+  "logs": {
+    "level": "INFO",
+    "file": "logs/watus.log"
+  }
+}

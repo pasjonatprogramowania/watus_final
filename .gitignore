@@ -1,0 +1,71 @@
+# ===================================================================
+# Plik .gitignore dla projektu watus_ai
+# ===================================================================
+
+# --- Pliki systemowe i edytorów tekstu ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# --- Środowiska wirtualne Python ---
+# Ignoruj wszystkie katalogi wirtualnych środowisk, które są widoczne w drzewie
+api_venv/
+.api_venv/
+audio_agent/.audio_venv/
+audio_agent/audio_venv/
+vision_agent/vision_venv/
+vision_agent/.vision_venv/
+# Ogólna reguła dla innych możliwych środowisk
+venv/
+env/
+.venv/
+.env/
+
+# --- Pliki i katalogi specyficzne dla Pythona ---
+# Pliki z skompilowanym kodem bajtowym
+__pycache__/
+*.py[cod]
+*$py.class
+# Dystrybucje i budowanie pakietów
+build/
+dist/
+*.egg-info/
+
+# --- Sekrety i konfiguracja środowiskowa ---
+# Plik z kluczami API, hasłami i innymi poufnymi danymi
+.env
+
+# --- Logi ---
+# Ignoruj wszystkie pliki z rozszerzeniem .log oraz katalogi z logami
+*.log
+logs/
+audio_agent/logs/
+
+# --- Duże pliki binarne i dane ---
+# Modele uczenia maszynowego (są zwykle bardzo duże)
+*.pt
+*.pth
+*.h5
+*.hdf5
+models/
+audio_agent/models/
+# Katalogi z danymi (zbiory danych, pliki tymczasowe)
+data/
+audio_agent/data/
+# Bazy danych wektorowe i pliki baz danych
+chroma_db/
+*.sqlite
+*.sqlite3
+*.db
+
+# --- Konfiguracje IDE ---
+# PyCharm
+.idea/
+# VS Code
+.vscode/
+
+# --- Pliki tymczasowe i śmieci ---
+# Ignoruj podejrzanie nazwany plik z katalogu tests
+audio_agent/tests/=0.1.4
