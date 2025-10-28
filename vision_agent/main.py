@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from ultralytics import YOLO
 
-from oczyWatusia.src import calc_brightness, calc_obj_angle, suggest_mode
+from vision_agent.src import calc_brightness, calc_obj_angle, suggest_mode
 from dotenv import load_dotenv
 from torch.amp import autocast
 load_dotenv()
