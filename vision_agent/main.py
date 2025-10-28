@@ -25,6 +25,13 @@ COLORS = np.array([
 COLORS_BGR = (COLORS[:, ::-1] * 255.0).astype(np.uint8)
 ESCAPE_BUTTON = "q"
 
+y_sizes = {
+    640: 480,
+    1024: 768,
+    1280: 720,
+    1920: 1080,
+    2560: 1440,
+}
 
 def pretty_print_dict(d, indent=1):
     res = "\n"
@@ -63,9 +70,10 @@ class CVAgent:
             self.cap = cv2.VideoCapture(cam_index)
             if not self.cap.isOpened():
                 print("Nie mogę otworzyć kamery")
-                return
         else:
             self.cap = cap
+
+        self.cv2_success = self.cap.isOpened()
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.video_recorder = None
 
@@ -85,6 +93,7 @@ class CVAgent:
         self.class_names = self.detector.names
         self.window_name = f"YOLOv12 – naciśnij '{ESCAPE_BUTTON}' aby wyjść"
 
+
     def init_recorder(self, out_path):
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         fps_cap = self.cap.get(cv2.CAP_PROP_FPS)
@@ -100,6 +109,13 @@ class CVAgent:
     def init_window(self):
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
 
+    def read_frame(self):
+        if self.cv2_success:
+            ret, frame = self.cap.read()
+        else:
+            frame = np.random.randn(y_sizes[self.imgsz], self.imgsz, 3)
+            ret = 1
+        return ret, frame
 
     def actualize_tracks(self, frame_bgr, track_id, point: tuple[int, int]):
         x, y = point
@@ -136,16 +152,16 @@ class CVAgent:
                 else:
                     _ = self.detector(_warm)
 
-    def detect_objects(self, frame_bgr, imgsz: int = 640, run_detection=True):
+    def detect_objects(self, frame_bgr, run_detection=True):
         if run_detection:
             with torch.inference_mode():
                 if self.device.type == "cuda":
                     with autocast(dtype=torch.float32, device_type=self.device.type):
                         detections = self.detector.track(frame_bgr, persist=True, device=self.device, verbose=False,
-                                                  imgsz=imgsz)
+                                                  imgsz=self.imgsz)
                 else:
                     detections = self.detector.track(frame_bgr, persist=True, device=self.device, verbose=False,
-                                              imgsz=imgsz)
+                                              imgsz=self.imgsz)
         return detections[0]
 
     def run(
@@ -177,7 +193,8 @@ class CVAgent:
             self.fps_params["t_prev"] = time.time()
 
             while True:
-                ret, frame_bgr = self.cap.read()
+                ret, frame_bgr = self.read_frame()
+                print(frame_bgr.shape[:2])
                 if not ret:
                     print("Koniec strumienia")
                     break
@@ -245,5 +262,5 @@ class CVAgent:
 
 
 if __name__ == "__main__":
-    agent = CVAgent()
+    agent = CVAgent(weights_path="finetuned1.pt")
     agent.run(save_video=False, show_window=True)
