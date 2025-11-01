@@ -19,18 +19,16 @@ ANTHROPIC_API_KEY=os.getenv("ANTHROPIC_API_KEY","")
 OLLAMA_BASE_URL="http://localhost:11434/v1"
 GOOGLE_PROVIDER = GoogleProvider(api_key=GEMINI_API_KEY)
 GOOGLE_MODEL = GoogleModel(GEMINI_MODEL, provider=GOOGLE_PROVIDER)
-OLLAMA_MODEL = OpenAIChatModel(
-    model_name='llama3:8b',
-    provider=OllamaProvider(base_url=OLLAMA_BASE_URL),
-)
+# OLLAMA_MODEL = OpenAIChatModel(
+#     model_name='llama3.1:8b',
+#     provider=OllamaProvider(base_url=OLLAMA_BASE_URL),
+# )
 # INNE MODELE
 # ANTHROPIC_MODEL_ = AnthropicModel(ANTHROPIC_MODEL)
 # OPENAI_MODEL_ = OpenAIModel(OPENAI_MODEL)
 # FALLBACK_MODEL = FallbackModel(OLLAMA_MODEL)
 # CURRENT_MODEL=FALLBACK_MODEL
-
 # CURRENT_MODEL= OLLAMA_MODEL
-
 CURRENT_MODEL=GOOGLE_MODEL
 CURRENT_PROVIDER=GOOGLE_PROVIDER
 ### FIELDS
@@ -73,7 +71,7 @@ LOGS_DEBUG_DIR = LOGS_DIR / "debug"
 #### URL
 BASE_API_PROT= "http://"
 BASE_API_HOST = "127.0.0.1"
-BASE_API_PORT = 8000
+BASE_API_PORT = 8002
 BASE_API_URL = f"{BASE_API_PROT}{BASE_API_HOST}:{BASE_API_PORT}"
 
 API_TEST = "/api1"
@@ -143,21 +141,55 @@ Pamiętaj: Pytania zawierające polecenia akcji (śledzenie, przestanie śledzen
 Zwróć wynik jako obiekt JSON z polami: is_allowed, is_actions_required, is_serious, is_tool_required (wszystkie typu boolean).
 """
 
+DOCUMENT_METADATA_SYSTEM_PROMPT = """
+Jesteś AI, które analizuje zapytanie użytkownika i wyodrębnia kluczowe informacje w następującej strukturze:
+
+1. **keywords** - Lista najważniejszych słów kluczowych z zapytania (minimum 20)
+2. **mentioned_names** - Lista imion osób wymienionych w zapytaniu (tylko właściwe imiona/nazwiska)
+3. **main_topic** - Krótki opis głównego tematu zapytania
+4. **categories** - Lista kategorii tematycznych zapytania 
+
+Przykłady analizy:
+
+Query: "Ile zarabia dziekan na WAT"
+- keywords: ["zarabia", "dziekan", "WAT"]
+- mentioned_names: [] 
+- main_topic: "Pensja dziekana na Wojskowej Akademii Technicznej"
+- categories: ["edukacja", "finanse"]
+
+Query: "Czy Jan Kowalski ma teraz wolne?"
+- keywords: ["wolne", "Jan Kowalski"]
+- mentioned_names: ["Jan Kowalski"]
+- main_topic: "Sprawdzenie dostępności pracownika"
+- categories: ["praca", "administracja"]
+
+Query: "Opowiedz żart o psie"
+- keywords: ["żart", "pies"]
+- mentioned_names: []
+- main_topic: "Opowiedzenie dowcipu o zwierzętach"
+- categories: ["rozrywma"]
+
+Zasady:
+- keywords: Używaj rzeczowników i czasowników kluczowych, unikaj stopwords
+- mentioned_names: Tylko konkretne imiona/nazwiska (np. "Anna Nowak"), nie tytuły (np. "profesor")
+- main_topic: Maksymalnie 3-5 słów opisujących sedno zapytania
+- categories: Wybierz 1-3 najbardziej trafne kategorie (np. edukacja, finanse, rozrywma, praca)
+
+Zwróć wynik jako obiekt JSON z polami: keywords, mentioned_names, main_topic, categories.
+"""
+
 CHOOSE_TOOL_SYSTEM_PROMPT = f"""
 Jesteś AI, które wybiera odpowiednie narzędzie na podstawie zapytania użytkownika i opisów dostępnych narzędzi. 
 Dostępne narzędzia:
-- google: Użyj do ogólnego wyszukiwania w internecie, np. aktualnych wiadomości, faktów lub ogólnej wiedzy.
 - watoznawca: Użyj do specjalistycznej wiedzy o Wojskowej Akademii Technicznej (WAT), np. kierunki studiów, historia, kadra czy wydarzenia na WAT.
 
-Output: Nazwa wybranego narzędzia (google lub watoznawca). Wybierz tylko jedno, najbardziej pasujące. Jeśli żadne nie pasuje, wybierz google jako domyślne.
+Output: Nazwa wybranego narzędzia (watoznawca)
 
 Przykłady:
-- Query: "Jaka jest pogoda w Warszawie?" Output: google (Wymaga wyszukiwania w internecie.)
 - Query: "Jakie są kierunki studiów na WAT?" Output: watoznawca (Specjalistyczna wiedza o WAT.)
-- Query: "Kto jest prezydentem Polski?" Output: google (Ogólna wiedza, wyszukiwanie w internecie.)
 - Query: "Ile zarabia dziekan WAT?" Output: watoznawca (Związane z kadrą WAT.)
 
-Na podstawie zapytania użytkownika outputuj tylko nazwę narzędzia (np. google lub watoznawca).
+Na podstawie zapytania użytkownika outputuj tylko nazwę narzędzia (watoznawca).
 """
 
 CHOOSE_ACTION_SYSTEM_PROMPT = """
