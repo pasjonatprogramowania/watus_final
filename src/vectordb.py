@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 import chromadb
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-from src import CURRENT_MODEL, END_POINT_PROCESS_QUESTION
+from src import CURRENT_MODEL, END_POINT_PROCESS_QUESTION, DOCUMENT_METADATA_SYSTEM_PROMPT, CHROMADB_PATH
 
 # Configure logging
 logging.basicConfig(
@@ -27,15 +27,15 @@ logger = logging.getLogger(__name__)
 DATA_FOLDER = "data"
 DATA_FILE = "question.jsonl"
 SUPPORTED_EXTENSIONS = [".jsonl"]  # Only process question.jsonl
-CHROMA_DB_PATH = "./chroma_db"
-COLLECTION_NAME = "conversations"
+CHROMADB_PATH = "./chroma_db"
+COLLECTION_NAME = "knowledge_base"
 TOPIC = "Topic"
 KEYWORDS = "Keywords"
 MENTIONED_NAMES = "Mentioned_names"
 CATEGORIES = "Categories"
 CONTENT = "Content"
 
-class ConversationMetadata(BaseModel):
+class DocumentMetadata(BaseModel):
     keywords: List[str] = Field(description="Lista słów kluczowych")
     mentioned_names: List[str] = Field(description="Lista imion rozmówców")
     main_topic: str = Field(description="Główny temat rozmowy")
@@ -43,56 +43,48 @@ class ConversationMetadata(BaseModel):
 
 class ProcessingResult(BaseModel):
     filename: str
-    conversation_content: Dict[str, Any]
-    metadata: ConversationMetadata
+    document_content: Dict[str, Any]
+    metadata: DocumentMetadata
     processing_id: str
 
-def generate_fallback_metadata(conversation_content: str) -> ConversationMetadata:
-    """Generate minimal metadata when AI generation fails"""
-    # Extract basic information from the conversation content
-    try:
-        # Try to parse the content and extract some basic details
-        data = json.loads(conversation_content)
+def log_llm_response(user_query: str, agent_name: str, response: str, response_time: float):
+    """Loguje odpowiedź LLM z pomiarem czasu."""
+    print(f"Pytanie: {user_query}")
+    print(f"Agent: {agent_name}")
+    print(f"Odpowiedz: {response}")
+    print(f"Czas odpowiedzi: {response_time:.3f} sekund")
+    print("-" * 50)
 
-        # Extract keywords from text_full if available
-        keywords = []
-        if isinstance(data, dict) and 'text_full' in data:
-            # Simple keyword extraction by splitting and taking unique words
-            keywords = list(set(data['text_full'].lower().split()))[:5]
+def run_agent_with_logging(content: str, agent_name: str, system_prompt: str, output_type: type) -> tuple:
+    """Uruchamia agenta z logowaniem czasu odpowiedzi."""
+    agent = Agent(
+        model=CURRENT_MODEL,
+        output_type=output_type,
+        system_prompt=system_prompt
+    )
+    start_time = time.time()
+    result = agent.run_sync(content)
+    response_time = time.time() - start_time
+    output = result.output
+    log_llm_response(content, agent_name, str(output), response_time)
+    return output, response_time
 
-        # Extract mentioned names if available
-        mentioned_names = []
-        if isinstance(data, dict) and 'speaker_id' in data:
-            mentioned_names = [data['speaker_id']]
 
-        # Determine main topic and categories
-        main_topic = "Rozmowa"
-        categories = ["rozmowa"]
-
-        if isinstance(data, dict) and 'type' in data:
-            main_topic = data.get('type', 'Rozmowa')
-            categories = [main_topic]
-
-        return ConversationMetadata(
-            keywords=keywords,
-            mentioned_names=mentioned_names,
-            main_topic=main_topic,
-            categories=categories
-        )
-    except Exception as e:
-        logger.warning(f"Fallback metadata generation failed: {e}")
-        # Completely generic fallback
-        return ConversationMetadata(
-            keywords=["rozmowa"],
-            mentioned_names=[],
-            main_topic="Nieznany temat",
-            categories=["rozmowa"]
-        )
-
-def generate_metadata(conversation_content: str) -> ConversationMetadata:
+def generate_metadata(conversation_content: str) -> DocumentMetadata:
     """Generate metadata for conversation"""
-    # Directly use fallback metadata generation
-    return generate_fallback_metadata(conversation_content)
+    # minutes_timeout = 1
+    # try:
+    #     metadata, _ = run_agent_with_logging(
+    #         conversation_content, "metadata_agent", DOCUMENT_METADATA_SYSTEM_PROMPT, DocumentMetadata
+    #     )
+    #     return metadata
+    # except:
+    #     time.sleep(minutes_timeout*60)
+
+    metadata, _ = run_agent_with_logging(
+        conversation_content, "metadata_agent", DOCUMENT_METADATA_SYSTEM_PROMPT, DocumentMetadata
+    )
+    return metadata
 
 def process_file(file_path: str) -> List[ProcessingResult]:
     """Process single conversation file and return list of results"""
@@ -105,22 +97,15 @@ def process_file(file_path: str) -> List[ProcessingResult]:
                 line = line.strip()
                 if not line:
                     continue
-
                 try:
-                    # Parse each line as a separate JSON object for JSONL files
-                    conversation_content = json.loads(line)
-
-                    # Generate metadata for this conversation
-                    metadata = generate_metadata(json.dumps(conversation_content))
-
-                    # Create processing result for this conversation
+                    document_content = json.loads(line)
+                    metadata = generate_metadata(json.dumps(document_content))
                     result = ProcessingResult(
                         filename=Path(file_path).name,
-                        conversation_content=conversation_content,
+                        document_content=document_content,
                         metadata=metadata,
                         processing_id=str(uuid.uuid4())
                     )
-
                     results.append(result)
                 except json.JSONDecodeError as e:
                     logger.warning(f"Skipping invalid JSON at line {line_num} in {file_path}: {e}")
@@ -133,7 +118,7 @@ def process_file(file_path: str) -> List[ProcessingResult]:
         logger.error(f"Error processing file {file_path}: {e}")
         return []
 
-def batch_process(folder: str = DATA_FOLDER) -> List[ProcessingResult]:
+def batch_process(folder: str = DATA_FOLDER):
     """Process all supported files in folder"""
     results = []
     folder_path = Path(folder)
@@ -150,31 +135,33 @@ def batch_process(folder: str = DATA_FOLDER) -> List[ProcessingResult]:
         logger.warning(f"No supported files found in folder {folder}")
         return results
 
-    logger.info(f"Found {len(files_to_process)} files to process")
+    logger.info(f"Found {len(files_to_process)} files to prrocess")
 
     for file in files_to_process:
-        result = process_file(str(file))
-        if result:
-            results.append(result)
+        file_results = process_file(str(file))
+        if file_results:
+            results.extend(file_results)  # Dodajemy poszczególne rezultaty, nie listy
 
-    logger.info(f"Successfully processed {len(results)} of {len(files_to_process)} files")
+    logger.info(f"Successfully processed {len(results)} conversations from {len(files_to_process)} files")
     return results
 
 def initialize_vector_db():
     """Initialize ChromaDB client and collection"""
     try:
-        client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-        collection = client.get_or_create_collection(
-            name=COLLECTION_NAME,
-            embedding_function=DefaultEmbeddingFunction()
-        )
-        logger.info(f"Vector database initialized at: {CHROMA_DB_PATH}")
-        return client, collection
+        if not Path(CHROMADB_PATH).exists():
+            os.makedirs(CHROMADB_PATH, exist_ok=True)
+            client = chromadb.PersistentClient(path=CHROMADB_PATH)
+            collection = client.get_or_create_collection(
+                name=COLLECTION_NAME,
+                embedding_function=DefaultEmbeddingFunction()
+            )
+            logger.info(f"Vector database initialized at: {CHROMADB_PATH}")
+            return client, collection
     except Exception as e:
-        logger.error(f"Error initializing vector database: {e}")
+        logger.error(f"Error initializing vector database: {str(e)}")
         return None, None
 
-def add_to_vector_db(collection, results: List[ProcessingResult]):
+def add_to_vector_db(collection, results):
     """Add processed conversations to vector database"""
     if not collection:
         logger.error("No vector database collection available")
@@ -185,10 +172,8 @@ def add_to_vector_db(collection, results: List[ProcessingResult]):
     ids = []
 
     for result in results:
-        doc_text = json.dumps(result.conversation_content, ensure_ascii=False)
-
+        doc_text = json.dumps(result.document_content, ensure_ascii=False)
         documents.append(doc_text)
-
         metadata = {
             TOPIC: result.metadata.main_topic,
             KEYWORDS: ", ".join(result.metadata.keywords[:20]),
@@ -207,6 +192,13 @@ def add_to_vector_db(collection, results: List[ProcessingResult]):
         logger.info(f"Added {len(documents)} conversations to vector database")
     except Exception as e:
         logger.error(f"Error adding to vector database: {e}")
+
+def return_collection(colection=COLLECTION_NAME):
+    client = chromadb.PersistentClient(path=CHROMADB_PATH)
+    return client.get_collection(
+        name=colection,
+        embedding_function=DefaultEmbeddingFunction()
+    )
 
 def search_vector_db(collection, query: str, n_results: int = 3):
     """Search vector database for similar conversations"""
@@ -242,6 +234,6 @@ def main():
     else:
         logger.warning("No files were successfully processed.")
 
-# Automatically process files when imported
-if __name__ == "__main__" or __name__ == "src.vectordb":
+# Automatically process files when ran as script
+if __name__ == "__main__":
     main()
