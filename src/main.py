@@ -247,7 +247,7 @@ def process_question(content: str) -> Answer:
         #     response = handle_action_selection(content)
         #     return Answer(answer=response, decisionVector=decision_vector)
 
-        if decision_data[TOOL_REQUIRED] == WATOZNAWCA_TOOL:
+        if decision_data[TOOL_REQUIRED] != None:
             try:
                 vector_result = vector_search(content)
                 additional_info = f"\nInformacje z bazy wektorowej:\n{'\n'.join([doc for doc in vector_result.documents])}\n"
@@ -303,3 +303,4 @@ def health():
 
 if __name__ == "__main__":
     uvicorn.run(app, host=BASE_API_HOST, port=BASE_API_PORT)
+
